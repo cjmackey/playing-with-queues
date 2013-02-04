@@ -39,7 +39,7 @@ class Box
 end
 
 class QueueRunner
-  attr_accessor :time, :queued_jobs, :on_demand_boxes, :completed_jobs, :running_jobs
+  attr_accessor :time, :queued_jobs, :on_demand_boxes, :completed_jobs, :running_jobs, :steps
   
   def initialize(opts={})
     @opts = opts.clone
@@ -49,10 +49,19 @@ class QueueRunner
     @queued_jobs = []
     @running_jobs = []
     @completed_jobs = []
-    @time = 0
+    @time = @opts[:t0] || 0
     (@opts[:initial_box_count] || 0).times do
       launch_on_demand(:launch_duration => 0)
     end
+    @steps = 0
+  end
+  
+  def percentile_queue_duration(percentile)
+    jobs = @completed_jobs.sort { |a, b| a.queue_duration <=> b.queue_duration }
+    ordinal_rank = (jobs.size * percentile / 100.0 + 0.5).round
+    ordinal_rank = 1 if ordinal_rank - 1 < 0
+    ordinal_rank = jobs.size if ordinal_rank > jobs.size
+    jobs[ordinal_rank-1].queue_duration
   end
   
   def boxes
@@ -103,12 +112,26 @@ class QueueRunner
     step until @future_jobs.size == 0 && @queued_jobs.size == 0 && @running_jobs.size == 0
   end
   
-  def step
-    @time += 1
+  def manage_job_period
+    @opts[:manage_job_period]
+  end
+  
+  def step(delta_time=nil)
+    @steps += 1
+    if delta_time
+      @time += delta_time
+    else
+      future_job_time = @future_jobs[0] && @future_jobs[0].request_time
+      job_done_time = @running_jobs.map { |j| j.finish_time }.min
+      job_management_time = @time - (@time % manage_job_period) + manage_job_period
+      box_time = boxes.find_all { |b| b.launch_time > @time }.map { |b| b.launch_time }.min
+      @time = [future_job_time, job_done_time, job_management_time, box_time
+              ].compact.min
+    end
     
     process_job_arrays
     
-    if 0 == @time % @opts[:manage_job_period]
+    if 0 == @time % manage_job_period
       manage_boxes
     end
     
