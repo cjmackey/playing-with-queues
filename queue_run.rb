@@ -39,7 +39,7 @@ class Box
 end
 
 class QueueRunner
-  attr_accessor :time, :queued_jobs, :on_demand_boxes, :completed_jobs, :running_jobs, :steps
+  attr_accessor :time, :queued_jobs, :on_demand_boxes, :completed_jobs, :running_jobs, :steps, :samples
   
   def initialize(opts={})
     @opts = opts.clone
@@ -96,16 +96,18 @@ class QueueRunner
     @on_demand_boxes << new_box({:launch_duration => on_demand_launch_duration}.merge(opts))
   end
   
-  def stop_spot
-    box ||= @on_demand_boxes.shuffle.find { |b| b.available? }
+  def terminate_spot
+    box ||= @spot_boxes.shuffle.find { |b| b.available?(@time) }
     raise 'no available box exists!' unless box
     box.termination_time = @time
+    self
   end
   
-  def stop_on_demand(box=nil)
-    box ||= @on_demand_boxes.shuffle.find { |b| b.available? }
+  def terminate_on_demand(box=nil)
+    box ||= @on_demand_boxes.shuffle.find { |b| b.available?(@time) }
     raise 'no available box exists!' unless box
     box.termination_time = @time
+    self
   end
   
   def step_to_completion
@@ -141,6 +143,9 @@ class QueueRunner
   end
   
   def manage_boxes
+    if @opts[:box_manager]
+      @opts[:box_manager].call(self)
+    end
   end
   
   def process_job_arrays
