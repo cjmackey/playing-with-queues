@@ -15,12 +15,17 @@ describe QueueRunner do
                             :spot_launch_duration => 11*60,
                             :t0 => t0,
                             :initial_box_count => initial_box_count,
+                            :reserved_count => 0,
+                            :reserved_price => 1.0,
+                            :on_demand_price => 2.1,
+                            :spot_price => 0.35,
                           }) }
   let(:q_opts) { default_q_opts }
   let(:q) { QueueRunner.new(q_opts) }
   it('starts with time zero') { q.time.should == 0 }
   it('steps to time one') { q.step(1).time.should == 1 }
   it('steps to the next job management time') { q.step.time.should == 50*60 }
+  it('calculates cost with one box') { q.launch_on_demand.step(1).costs.should == 2.1 }
   context "with a different t0" do
     let(:t0) { 15 }
     it("starts at a different time") { q.time.should == 15 }

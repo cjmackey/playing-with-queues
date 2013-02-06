@@ -36,6 +36,12 @@ class Box
   def available?(time)
     usable?(time) && (!job || time >= job.finish_time)
   end
+  def life_duration(time=nil)
+    (termination_time || time) - launch_time
+  end
+  def hours(time=nil)
+    (life_duration(time) / 3600.0).ceil
+  end
 end
 
 class QueueRunner
@@ -90,10 +96,12 @@ class QueueRunner
   
   def launch_spot(opts={})
     @spot_boxes << new_box({:launch_duration => spot_launch_duration}.merge(opts))
+    self
   end
   
   def launch_on_demand(opts={})
     @on_demand_boxes << new_box({:launch_duration => on_demand_launch_duration}.merge(opts))
+    self
   end
   
   def terminate_spot
@@ -169,6 +177,18 @@ class QueueRunner
   
   def run(queue_entries)
     {:spots => 0, :on_demands => 0}
+  end
+  
+  def costs
+    # NOTE: does not take into account reserved instances (that is much more complicated)
+    total = 0.0
+    @spot_boxes.each do |box|
+      total += box.hours(@time) * @opts[:spot_price]
+    end
+    @on_demand_boxes.each do |box|
+      total += box.hours(@time) * @opts[:on_demand_price]
+    end
+    total
   end
   
 end
